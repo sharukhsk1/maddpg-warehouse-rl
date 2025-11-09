@@ -278,18 +278,26 @@ def train_maddpg(n_episodes=1000, max_t=200, print_every=10,
     return scores_list, agent_scores_list, actor_losses_list, critic_losses_list
 
 
-def run_grid_search():
-    param_grid = {
-        'lr_actor': [1e-4, 5e-4],
-        'lr_critic': [1e-3, 5e-3],
-        'gamma': [0.95, 0.99],
-        'tau': [1e-2, 5e-2],
-        'batch_size': [64, 128],
-        'buffer_size': [50000, 100000]
-    }
 
-    keys, values = zip(*param_grid.items())
-    param_combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
+
+def run_grid_search():
+    # Manually define 5 best configurations
+    param_combinations = [
+        # Config 0: Your best performing config from previous run
+        {'lr_actor': 1e-4, 'lr_critic': 1e-3, 'gamma': 0.95, 'tau': 0.01, 'batch_size': 64, 'buffer_size': 100000},
+        
+        # Config 1: Slightly higher actor learning rate for faster learning
+        {'lr_actor': 5e-4, 'lr_critic': 1e-3, 'gamma': 0.95, 'tau': 0.01, 'batch_size': 64, 'buffer_size': 100000},
+        
+        # Config 2: Higher gamma for better long-term reward consideration
+        {'lr_actor': 1e-4, 'lr_critic': 1e-3, 'gamma': 0.99, 'tau': 0.01, 'batch_size': 64, 'buffer_size': 100000},
+        
+        # Config 3: Faster target network updates (higher tau)
+        {'lr_actor': 1e-4, 'lr_critic': 1e-3, 'gamma': 0.95, 'tau': 0.05, 'batch_size': 64, 'buffer_size': 100000},
+        
+        # Config 4: Larger batch size for more stable gradients
+        {'lr_actor': 1e-4, 'lr_critic': 1e-3, 'gamma': 0.95, 'tau': 0.01, 'batch_size': 128, 'buffer_size': 100000},
+    ]
 
     best_score = -float('inf')
     best_params = None
@@ -300,9 +308,9 @@ def run_grid_search():
         checkpoint_path = f"maddpg/checkpoints/best_model_{i}.pth"
 
         scores, *_ = train_maddpg(
-            n_episodes=1600,  # Adjust for faster runs
+            n_episodes=1000,  # Reduced to 1000 episodes as requested
             max_t=200,
-            print_every=200,
+            print_every=200,  # Print more frequently
             lr_actor=params['lr_actor'],
             lr_critic=params['lr_critic'],
             gamma=params['gamma'],
@@ -322,6 +330,7 @@ def run_grid_search():
 
     print(f"\nBest average score {best_score:.2f} obtained with params: {best_params}")
     print(f"Best checkpoint saved at {best_checkpoint}")
+
 
 
 if __name__ == "__main__":
