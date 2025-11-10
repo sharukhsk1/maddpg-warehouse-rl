@@ -437,7 +437,7 @@ def evaluate_checkpoint(ckpt_path, episodes=5, max_t=300, seed=123):
 def main():
     # You can bump episodes to 1000–1500 for your final run.
     base = dict(
-        n_episodes=300,
+        n_episodes=500,
         max_t=300,
         buffer_size=120_000,
         batch_size=256,
