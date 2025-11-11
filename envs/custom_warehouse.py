@@ -445,9 +445,9 @@ WWWWWWWWWWWWWWWWWWWWWWWW"""
                     dist = abs(agent['position'][0] - task['pickup_loc'][0]) + \
                            abs(agent['position'][1] - task['pickup_loc'][1])
                     if dist <= 3:
-                        rewards[agent_id] += 0.2
+                        rewards[agent_id] += 0.05
                     if dist <= 1:
-                        rewards[agent_id] += 0.5
+                        rewards[agent_id] += 0.1
 
         # Update tasks
         self.update_tasks()
@@ -465,29 +465,34 @@ WWWWWWWWWWWWWWWWWWWWWWWW"""
 
     def _get_best_target(self, agent: Dict) -> Optional[Tuple[int, int]]:
         """Determine best target considering battery, deliveries, priorities"""
+
         battery_pct = agent['battery'] / agent['battery_capacity']
 
-        # Emergency charging
-        if battery_pct < 0.2:
-            return min(self.charging_stations, key=lambda c: abs(agent['position'][0]-c[0]) + abs(agent['position'][1]-c[1]))
+        # ✅ ONLY charge when battery < 10%
+        if battery_pct < 0.10:
+            return min(
+                self.charging_stations,
+                key=lambda c: abs(agent['position'][0] - c[0]) + abs(agent['position'][1] - c[1])
+            )
 
-        # Deliver if carrying
+        # ✅ If carrying, deliver immediately
         if agent['carrying_count'] > 0:
-            return min(self.workstations, key=lambda ws: abs(agent['position'][0]-ws[0]) + abs(agent['position'][1]-ws[1]))
+            return min(
+                self.workstations,
+                key=lambda ws: abs(agent['position'][0] - ws[0]) + abs(agent['position'][1] - ws[1])
+            )
 
-        # Pickup high-priority task
+        # ✅ Go to nearest high-priority pending task
         pending_tasks = [t for t in self.tasks if t['status'] == 'pending']
         if pending_tasks:
             return max(
                 pending_tasks,
-                key=lambda t: (t['priority'] / (1 + abs(agent['position'][0]-t['pickup_loc'][0]) +
-                                                abs(agent['position'][1]-t['pickup_loc'][1]))),
+                key=lambda t: (t['priority'] /
+                            (1 + abs(agent['position'][0] - t['pickup_loc'][0]) +
+                                    abs(agent['position'][1] - t['pickup_loc'][1])))
             )['pickup_loc']
 
-        # Pre-emptive charge
-        if battery_pct < 0.6:
-            return min(self.charging_stations, key=lambda c: abs(agent['position'][0]-c[0]) + abs(agent['position'][1]-c[1]))
-
+        # ✅ No other charging, no pre-emptive charging
         return None
 
     def _compute_path_to_target(self, agent: Dict, target: Tuple[int, int]) -> Optional[List[Tuple[int, int]]]:
@@ -530,9 +535,9 @@ WWWWWWWWWWWWWWWWWWWWWWWW"""
 
         # Gradual low-battery penalty if not addressing it
         battery_pct = agent['battery'] / agent['battery_capacity']
-        if battery_pct < 0.25 and action not in [Action.NOOP, Action.COMMUNICATE, Action.REQUEST_PRIORITY]:
+        if battery_pct < 0.10 and action not in [Action.NOOP, Action.COMMUNICATE, Action.REQUEST_PRIORITY]:
             if agent['position'] not in self.charging_stations:
-                reward -= (0.25 - battery_pct) * 1.0
+                reward -= 0.1
 
         if action == Action.NOOP:
             agent['battery'] -= 0.01
@@ -550,8 +555,8 @@ WWWWWWWWWWWWWWWWWWWWWWWW"""
             new_pos = self._get_front_position(agent)
             if self._is_valid_move(agent, new_pos):
                 agent['position'] = new_pos
-                agent['battery'] -= 0.02
-                reward += 0.05  # small exploration reward
+                agent['battery'] -= 0.0005
+                reward += 0.01  # small exploration reward
 
                 # Shaping: if moving closer to best target
                 best_target = self._get_best_target(agent)
@@ -560,34 +565,34 @@ WWWWWWWWWWWWWWWWWWWWWWWW"""
                     last_dist = agent.get('last_dist_to_target')
                     if last_dist is not None:
                         if current_dist < last_dist:
-                            reward += 0.10
+                            reward += 0.02
                         elif current_dist > last_dist:
-                            reward -= 0.02
+                            reward -= 0.005
                     agent['last_dist_to_target'] = current_dist
             else:
                 reward -= 0.02
-                agent['battery'] -= 0.01
+                agent['battery'] -= 0.0005
 
         elif action == Action.LEFT:
             agent['direction'] = (agent['direction'] - 1) % 4
-            agent['battery'] -= 0.01
+            agent['battery'] -= 0.0001
             # tiny reward if trying to escape being stuck
             if agent.get('stuck_counter', 0) > 2:
                 reward += 0.01
 
         elif action == Action.RIGHT:
             agent['direction'] = (agent['direction'] + 1) % 4
-            agent['battery'] -= 0.01
+            agent['battery'] -= 0.0001
             if agent.get('stuck_counter', 0) > 2:
                 reward += 0.01
 
         elif action == Action.PICKUP:
             reward += self._execute_pickup(agent)
-            agent['battery'] -= 0.05
+            agent['battery'] -= 0.005
 
         elif action == Action.DELIVERY:
             reward += self._execute_delivery(agent)
-            agent['battery'] -= 0.05
+            agent['battery'] -= 0.005
 
         elif action == Action.COMMUNICATE:
             if self.enable_communication:
@@ -607,7 +612,7 @@ WWWWWWWWWWWWWWWWWWWWWWWW"""
         else:
             if agent['position'] == agent['last_position']:
                 agent['stuck_counter'] += 1
-                reward -= min(agent['stuck_counter'] * 0.01, 0.1)
+                reward -= 0.02
             else:
                 if agent['stuck_counter'] > 5:
                     reward += 0.5  # escaped long stuck
@@ -620,7 +625,7 @@ WWWWWWWWWWWWWWWWWWWWWWWW"""
                 current_dist = abs(agent['position'][0] - best_target[0]) + abs(agent['position'][1] - best_target[1])
                 if agent.get('last_dist_to_target') is not None:
                     if current_dist < agent['last_dist_to_target']:
-                        reward += 0.2
+                        reward += 0.02
                     elif current_dist > agent['last_dist_to_target']:
                         reward -= 0.01
                 agent['last_dist_to_target'] = current_dist
@@ -665,7 +670,7 @@ WWWWWWWWWWWWWWWWWWWWWWWW"""
             agent['carrying'].append(pickup_task['id'])
 
             priority_multiplier = {1: 1.0, 2: 1.5, 3: 2.0}
-            reward = 10.0 * priority_multiplier[pickup_task['priority']]
+            reward = 40.0 * priority_multiplier[pickup_task['priority']]
             agent['battery'] -= 0.08
         else:
             reward -= 0.1
@@ -697,11 +702,11 @@ WWWWWWWWWWWWWWWWWWWWWWWW"""
             task['completion_time'] = self.timestep
 
             priority_multiplier = {1: 1.0, 2: 1.5, 3: 2.0}
-            reward += 15.0 * priority_multiplier[task['priority']]
+            reward += 80.0 * priority_multiplier[task['priority']]
 
             time_taken = self.timestep - task['spawn_time']
             if time_taken < task['max_time'] * 0.5:
-                reward += 5.0  # fast delivery bonus
+                reward += 20.0  # fast delivery bonus
 
             agent['carrying_count'] -= 1
             agent['current_task'] = None
@@ -820,18 +825,28 @@ WWWWWWWWWWWWWWWWWWWWWWWW"""
 
     # ---------------- Rewards / Observations / Infos ----------------
 
-    def _compute_charging_reward(self, agent: Dict, distance_to_charger: float) -> float:
-        """Reward agent for good charging behavior"""
+    def _compute_charging_reward(self, agent, distance_to_charger):
         reward = 0.0
-        if agent['battery'] < 25:
-            reward += 0.5 if distance_to_charger <= 5 else -0.8
-        elif agent['battery'] < 50 and agent['in_charging_station']:
-            reward += 0.3
-        if agent['battery'] > 95 and agent['charging']:
-            reward -= 0.1
-        if agent['battery'] > 80 and agent['in_charging_station']:
-            reward -= 0.05
+
+        # ✅ ONLY reward charging if battery < 10%
+        if agent['battery'] < agent['battery_capacity'] * 0.10:
+            if agent['position'] in self.charging_stations:
+                reward += 0.3       # good, charging at low battery
+            else:
+                reward -= 0.3       # bad, not moving to charger
+        else:
+            # ✅ Penalize being near or inside charger unnecessarily
+            if agent['position'] in self.charging_stations:
+                reward -= 0.5
+            if distance_to_charger <= 3:
+                reward -= 0.1
+
+        # ✅ Penalize overcharging
+        if agent['battery'] > agent['battery_capacity'] * 0.95 and agent['charging']:
+            reward -= 0.2
+
         return reward
+
 
     def _get_observations(self) -> List[np.ndarray]:
         """Get observations for all agents"""
@@ -958,7 +973,7 @@ WWWWWWWWWWWWWWWWWWWWWWWW"""
                 agent['battery'] = min(agent['battery'] + charge_amount, agent['battery_capacity'])
             else:
                 # Tiny idle drain
-                agent['battery'] = max(0, agent['battery'] - 0.001)
+                agent['battery'] = max(0, agent['battery'] - 0.0001)
 
     def _update_charging_stations(self):
         """Update charging status"""
@@ -1166,3 +1181,4 @@ if __name__ == "__main__":
             env.render()
     env.close()
     print("\n✅ Test completed successfully!")
+
