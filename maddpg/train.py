@@ -282,7 +282,7 @@ def train_maddpg(config, run_name, resume_from=None):
             ep_actions.append(actions)
 
             # track tasks if env exposes it
-            ep_tasks = safe_get_info(info, 'tasks_completed', ep_tasks)
+            ep_tasks = safe_get_info(info, 'completed_tasks', ep_tasks)
 
             # store transition
             memory.add(observations, actions, rewards, next_obs, terminated)
@@ -414,7 +414,7 @@ def evaluate_checkpoint(ckpt_path, episodes=5, max_t=300, seed=123):
                 actions.append(a)
             next_obs, rewards, terminated, truncated, info = env.step(actions)
             ep_actions.append(actions)
-            ep_tasks = safe_get_info(info, 'tasks_completed', ep_tasks)
+            ep_tasks = safe_get_info(info, 'completed_tasks', ep_tasks)
             ep_rewards += np.array(rewards, dtype=np.float32)
             observations = next_obs
             if terminated or truncated:
@@ -437,19 +437,19 @@ def evaluate_checkpoint(ckpt_path, episodes=5, max_t=300, seed=123):
 def main():
     # You can bump episodes to 1000–1500 for your final run.
     base = dict(
-        n_episodes=500,
-        max_t=300,
+        n_episodes=1000,
+        max_t=500,
         buffer_size=120_000,
         batch_size=256,
         gamma=0.99,
         lr_actor=1e-4,
         lr_critic=1e-3,
         tau=1e-2,
-        eps_start=0.15,
-        eps_end=0.02,
-        eps_decay=0.997,
+        eps_start=0.5,
+        eps_end=0.1,
+        eps_decay=0.995,
         seed=42,
-        print_every=25
+        print_every=100
     )
 
     # 6 compact configs that generally work well for MADDPG on discrete wrappers.
@@ -495,3 +495,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
