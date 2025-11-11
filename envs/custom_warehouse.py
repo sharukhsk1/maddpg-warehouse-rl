@@ -683,47 +683,45 @@ WWWWWWWWWWWWWWWWWWWWWWWW"""
         reward = 0.0
         agent_pos = tuple(agent['position'])
 
-        # Must be at workstation
+        # 1. Must be at *any* workstation
         at_ws = any(agent_pos == ws for ws in self.workstations)
         if not at_ws:
-            reward -= 0.1
+            reward -= 0.1  # Not at a workstation, penalize
             agent['battery'] -= 0.08
             return reward
 
-        # Must be carrying
+        # 2. Must be carrying a task
         if agent['carrying_count'] == 0 or agent['current_task'] is None:
-            reward -= 0.1
+            reward -= 0.1  # At a workstation, but not carrying anything
             agent['battery'] -= 0.08
             return reward
-
+        
         task = agent['current_task']
-        if task['delivery_loc'] == agent_pos:
-            task['status'] = 'completed'
-            task['completion_time'] = self.timestep
+        task['status'] = 'completed'
+        task['completion_time'] = self.timestep
 
-            priority_multiplier = {1: 1.0, 2: 1.5, 3: 2.0}
-            reward += 80.0 * priority_multiplier[task['priority']]
+        priority_multiplier = {1: 1.0, 2: 1.5, 3: 2.0}
+        reward += 80.0 * priority_multiplier[task['priority']] # SUCCESS!
 
-            time_taken = self.timestep - task['spawn_time']
-            if time_taken < task['max_time'] * 0.5:
-                reward += 20.0  # fast delivery bonus
+        time_taken = self.timestep - task['spawn_time']
+        if time_taken < task['max_time'] * 0.5:
+            reward += 20.0  # fast delivery bonus
 
-            agent['carrying_count'] -= 1
-            agent['current_task'] = None
-            agent['task_id'] = None
-            agent['tasks_completed'] += 1
-            if task['id'] in agent['carrying']:
-                agent['carrying'].remove(task['id'])
-            agent['battery'] -= 0.08
+        # Clear the agent's task
+        agent['carrying_count'] -= 1
+        agent['current_task'] = None
+        agent['task_id'] = None
+        agent['tasks_completed'] += 1
+        if task['id'] in agent['carrying']:
+            agent['carrying'].remove(task['id'])
+        agent['battery'] -= 0.08
 
-            self.completed_tasks += 1
-            self._spawn_new_task()
-        else:
-            reward -= 0.1
-            agent['battery'] -= 0.08
-
+        # Mark as completed and spawn a new one
+        self.completed_tasks += 1
+        self._spawn_new_task()
+        
         return reward
-
+        
     def _execute_request_priority(self, agent_id: int) -> float:
         """Execute REQUEST_PRIORITY action - broadcast high priority task"""
         agent = self.agents[agent_id]
