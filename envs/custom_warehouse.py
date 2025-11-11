@@ -422,7 +422,7 @@ WWWWWWWWWWWWWWWWWWWWWWWW"""
         # Execute actions
         for i, action in enumerate(actions):
             reward = self._execute_action(i, int(action))
-            rewards[i] = np.clip(reward, -5.0, 5.0)
+            rewards[i] = np.clip(reward, -100.0, 150.0)
 
         # Battery + charging
         if self.use_battery:
@@ -538,17 +538,16 @@ WWWWWWWWWWWWWWWWWWWWWWWW"""
         if battery_pct < 0.10 and action not in [Action.NOOP, Action.COMMUNICATE, Action.REQUEST_PRIORITY]:
             if agent['position'] not in self.charging_stations:
                 reward -= 0.1
-
+                
+        if agent['carrying_count'] > 0:
+                    reward += 0.02
+            
         if action == Action.NOOP:
             agent['battery'] -= 0.01
             battery_pct = agent['battery'] / agent['battery_capacity']
             if battery_pct > 0.3 and agent['carrying_count'] == 0:
                 if any(t['status'] == 'pending' for t in self.tasks):
                     reward -= 0.01
-
-        # Bonus while carrying
-        if agent['carrying_count'] > 0:
-            reward += 0.02
 
         elif action == Action.FORWARD:
             # TRUE GRID MOVE: move one cell in facing direction if valid
